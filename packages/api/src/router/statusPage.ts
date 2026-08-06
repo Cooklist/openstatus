@@ -24,13 +24,13 @@ import {
   upsertSelfSignupSubscriber,
   verifySelfSignupSubscriber,
 } from "@openstatus/services/page-subscriber";
+import { getChannel } from "@openstatus/subscriptions";
 import { TRPCError } from "@trpc/server";
 import { endOfDay, startOfDay, subDays } from "date-fns";
 import { z } from "zod";
 
 import { createTRPCRouter, publicProcedure } from "../trpc";
 import {
-  type StatusData,
   activeReportStatus,
   fillStatusDataFor45Days,
   fillStatusDataFor45DaysNoop,
@@ -39,6 +39,7 @@ import {
   getWorstVariant,
   isMonitorComponent,
   setDataByType,
+  type StatusData,
   withTinybirdFallback,
 } from "./statusPage.utils";
 import {
@@ -75,6 +76,23 @@ function constantTimeEqual(
   return mismatch === 0;
 }
 
+function getSubscriptionVerifyUrl(subscription: {
+  customDomain: string | null;
+  pageSlug: string;
+  token: string | null;
+}) {
+  if (!subscription.token) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Subscription has no verification token",
+    });
+  }
+
+  return subscription.customDomain
+    ? `https://${subscription.customDomain}/verify/${subscription.token}`
+    : `https://${subscription.pageSlug}.openstatus.dev/verify/${subscription.token}`;
+}
+
 // Gate fields for getGate, reusing selectPageSchema's stringToArray transforms
 // so authEmailDomains / allowedIpRanges come back as arrays like getLight.
 const gateFieldsSchema = selectPageSchema.pick({
@@ -104,7 +122,8 @@ export const statusPageRouter = createTRPCRouter({
       if (!opts.input.slug) return null;
 
       const _page = await opts.ctx.db.query.page.findFirst({
-        where: sql`lower(${page.slug}) = ${opts.input.slug} OR lower(${page.customDomain}) = ${opts.input.slug}`,
+        where:
+          sql`lower(${page.slug}) = ${opts.input.slug} OR lower(${page.customDomain}) = ${opts.input.slug}`,
         with: {
           workspace: true,
           statusReports: {
@@ -180,33 +199,31 @@ export const statusPageRouter = createTRPCRouter({
 
         if (c.type === "static") {
           // Static: only reports and maintenances affect status
-          status =
-            reportStatus ??
+          status = reportStatus ??
             (events.some(
-              (e) =>
-                e.type === "maintenance" &&
-                e.to &&
-                e.from.getTime() <= new Date().getTime() &&
-                e.to.getTime() >= new Date().getTime(),
-            )
+                (e) =>
+                  e.type === "maintenance" &&
+                  e.to &&
+                  e.from.getTime() <= new Date().getTime() &&
+                  e.to.getTime() >= new Date().getTime(),
+              )
               ? "info"
               : "success");
         } else {
           // Monitor: incidents, reports, and maintenances affect status
-          status =
-            events.some((e) => e.type === "incident" && !e.to) &&
-            barType !== "manual"
-              ? "error"
-              : (reportStatus ??
-                (events.some(
+          status = events.some((e) => e.type === "incident" && !e.to) &&
+              barType !== "manual"
+            ? "error"
+            : (reportStatus ??
+              (events.some(
                   (e) =>
                     e.type === "maintenance" &&
                     e.to &&
                     e.from.getTime() <= new Date().getTime() &&
                     e.to.getTime() >= new Date().getTime(),
                 )
-                  ? "info"
-                  : "success"));
+                ? "info"
+                : "success"));
         }
 
         return {
@@ -224,20 +241,19 @@ export const statusPageRouter = createTRPCRouter({
           reports: _page.statusReports,
           monitorId: c.monitor.id,
         });
-        const status =
-          events.some((e) => e.type === "incident" && !e.to) &&
-          barType !== "manual"
-            ? "error"
-            : (activeReportStatus(events) ??
-              (events.some(
+        const status = events.some((e) => e.type === "incident" && !e.to) &&
+            barType !== "manual"
+          ? "error"
+          : (activeReportStatus(events) ??
+            (events.some(
                 (e) =>
                   e.type === "maintenance" &&
                   e.to &&
                   e.from.getTime() <= new Date().getTime() &&
                   e.to.getTime() >= new Date().getTime(),
               )
-                ? "info"
-                : "success"));
+              ? "info"
+              : "success"));
         return {
           ...c.monitor,
           status,
@@ -252,8 +268,8 @@ export const statusPageRouter = createTRPCRouter({
       const privateLocationCounts = new Map<number, number>();
       if (monitors.length > 0) {
         const monitorIds = monitors.map((m) => m.id);
-        const privateLocations =
-          await opts.ctx.db.query.privateLocationToMonitors.findMany({
+        const privateLocations = await opts.ctx.db.query
+          .privateLocationToMonitors.findMany({
             where: and(
               inArray(privateLocationToMonitors.monitorId, monitorIds),
               isNull(privateLocationToMonitors.deletedAt),
@@ -282,14 +298,14 @@ export const statusPageRouter = createTRPCRouter({
       // no barType gate: incident-driven error is already suppressed per
       // monitor in manual mode; report-driven error (major_outage) must show
       const status = monitorsWithPrivateLocationCount.some(
-        (m) => m.status === "error",
-      )
+          (m) => m.status === "error",
+        )
         ? "error"
         : monitorsWithPrivateLocationCount.some((m) => m.status === "degraded")
-          ? "degraded"
-          : monitorsWithPrivateLocationCount.some((m) => m.status === "info")
-            ? "info"
-            : "success";
+        ? "degraded"
+        : monitorsWithPrivateLocationCount.some((m) => m.status === "info")
+        ? "info"
+        : "success";
 
       // Get page-wide events (not tied to specific monitors)
       const pageEvents = getEvents({
@@ -433,8 +449,9 @@ export const statusPageRouter = createTRPCRouter({
         if (
           a.statusReportUpdates.length === 0 &&
           b.statusReportUpdates.length === 0
-        )
+        ) {
           return 0;
+        }
         if (a.statusReportUpdates.length === 0) return -1;
         if (b.statusReportUpdates.length === 0) return -1;
         return (
@@ -452,14 +469,11 @@ export const statusPageRouter = createTRPCRouter({
       // In "manual" mode the page only surfaces user-authored events, so drop
       // monitor-derived incidents from the components consumers read (e.g. the
       // calendar). Mirrors the bar/uptime gating in statusPage.utils.ts.
-      const publicPageComponents =
-        barType === "manual"
-          ? pageComponents.map((c) =>
-              c.monitor
-                ? { ...c, monitor: { ...c.monitor, incidents: [] } }
-                : c,
-            )
-          : pageComponents;
+      const publicPageComponents = barType === "manual"
+        ? pageComponents.map((c) =>
+          c.monitor ? { ...c, monitor: { ...c.monitor, incidents: [] } } : c
+        )
+        : pageComponents;
 
       return selectPublicPageSchemaWithRelation.parse({
         ..._page,
@@ -467,8 +481,9 @@ export const statusPageRouter = createTRPCRouter({
         monitors: monitorsWithPrivateLocationCount,
         monitorGroups,
         trackers,
-        incidents:
-          monitorsWithPrivateLocationCount.flatMap((m) => m.incidents) ?? [],
+        incidents: monitorsWithPrivateLocationCount.flatMap((m) =>
+          m.incidents
+        ) ?? [],
         statusReports,
         maintenances,
         workspacePlan: _page.workspace.plan,
@@ -488,7 +503,8 @@ export const statusPageRouter = createTRPCRouter({
 
       // Single query with all relations
       const _page = await opts.ctx.db.query.page.findFirst({
-        where: sql`lower(${page.slug}) = ${opts.input.slug} OR lower(${page.customDomain}) = ${opts.input.slug}`,
+        where:
+          sql`lower(${page.slug}) = ${opts.input.slug} OR lower(${page.customDomain}) = ${opts.input.slug}`,
         with: {
           workspace: true,
           statusReports: {
@@ -581,7 +597,8 @@ export const statusPageRouter = createTRPCRouter({
       if (!opts.input.slug) return null;
 
       const _page = await opts.ctx.db.query.page.findFirst({
-        where: sql`lower(${page.slug}) = ${opts.input.slug} OR lower(${page.customDomain}) = ${opts.input.slug}`,
+        where:
+          sql`lower(${page.slug}) = ${opts.input.slug} OR lower(${page.customDomain}) = ${opts.input.slug}`,
         columns: {
           slug: true,
           customDomain: true,
@@ -658,7 +675,8 @@ export const statusPageRouter = createTRPCRouter({
       if (!input.slug) return null;
 
       const _page = await opts.ctx.db.query.page.findFirst({
-        where: sql`lower(${page.slug}) = ${input.slug} OR lower(${page.customDomain}) = ${input.slug}`,
+        where:
+          sql`lower(${page.slug}) = ${input.slug} OR lower(${page.customDomain}) = ${input.slug}`,
         with: {
           maintenances: {
             with: {
@@ -719,14 +737,14 @@ export const statusPageRouter = createTRPCRouter({
         input.barType === "manual"
           ? Promise.resolve([null, null, null])
           : Promise.all(
-              Object.entries(proceduresByType).map(([type, procedure]) => {
-                const monitorIds = monitorsByType[
-                  type as keyof typeof proceduresByType
-                ].map((c) => c.monitor.id.toString());
-                if (monitorIds.length === 0) return null;
-                return procedure({ monitorIds });
-              }),
-            ),
+            Object.entries(proceduresByType).map(([type, procedure]) => {
+              const monitorIds = monitorsByType[
+                type as keyof typeof proceduresByType
+              ].map((c) => c.monitor.id.toString());
+              if (monitorIds.length === 0) return null;
+              return procedure({ monitorIds });
+            }),
+          )
       );
 
       const tinybirdUnhealthy = !tinybird.ok;
@@ -759,8 +777,7 @@ export const statusPageRouter = createTRPCRouter({
       const parsedConfiguration = pageConfigurationSchema.safeParse(
         _page.configuration ?? {},
       );
-      const lookbackPeriod =
-        input.days ??
+      const lookbackPeriod = input.days ??
         (parsedConfiguration.success ? parsedConfiguration.data.days : 45);
 
       return pageComponents.map((c) => {
@@ -774,8 +791,7 @@ export const statusPageRouter = createTRPCRouter({
         });
 
         // Determine whether to use real Tinybird data or synthetic data
-        const shouldUseRealData =
-          c.type === "monitor" &&
+        const shouldUseRealData = c.type === "monitor" &&
           c.monitor &&
           input.barType !== "manual" &&
           !tinybirdUnhealthy &&
@@ -986,7 +1002,8 @@ export const statusPageRouter = createTRPCRouter({
 
       // NOTE: revalidate the public monitors first
       const _page = await opts.ctx.db.query.page.findFirst({
-        where: sql`lower(${page.slug}) = ${opts.input.slug} OR lower(${page.customDomain}) = ${opts.input.slug}`,
+        where:
+          sql`lower(${page.slug}) = ${opts.input.slug} OR lower(${page.customDomain}) = ${opts.input.slug}`,
         with: {
           pageComponents: {
             with: {
@@ -1028,7 +1045,7 @@ export const statusPageRouter = createTRPCRouter({
             if (monitorIds.length === 0) return null;
             return procedure({ monitorIds });
           }),
-        ),
+        )
       );
 
       const [
@@ -1091,7 +1108,8 @@ export const statusPageRouter = createTRPCRouter({
       if (!opts.input.slug) return null;
 
       const _page = await opts.ctx.db.query.page.findFirst({
-        where: sql`lower(${page.slug}) = ${opts.input.slug} OR lower(${page.customDomain}) = ${opts.input.slug}`,
+        where:
+          sql`lower(${page.slug}) = ${opts.input.slug} OR lower(${page.customDomain}) = ${opts.input.slug}`,
         with: {
           pageComponents: {
             where: eq(pageComponent.monitorId, opts.input.id),
@@ -1160,7 +1178,7 @@ export const statusPageRouter = createTRPCRouter({
             fromDate,
             toDate,
           }),
-        ]),
+        ])
       );
 
       const [latency, regions, uptime] = metrics.data ?? [
@@ -1193,7 +1211,8 @@ export const statusPageRouter = createTRPCRouter({
       if (!opts.input.slug) return null;
 
       const _page = await opts.ctx.db.query.page.findFirst({
-        where: sql`lower(${page.slug}) = ${opts.input.slug} OR lower(${page.customDomain}) = ${opts.input.slug}`,
+        where:
+          sql`lower(${page.slug}) = ${opts.input.slug} OR lower(${page.customDomain}) = ${opts.input.slug}`,
         with: {
           workspace: true,
         },
@@ -1251,6 +1270,30 @@ export const statusPageRouter = createTRPCRouter({
           message: "Email already subscribed",
         });
       }
+
+      const channel = getChannel("email");
+      if (!channel?.sendVerification) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Email channel not found",
+        });
+      }
+
+      await channel.sendVerification(
+        {
+          id: subscription.id,
+          pageId: subscription.pageId,
+          pageName: subscription.pageName,
+          pageSlug: subscription.pageSlug,
+          customDomain: subscription.customDomain,
+          componentIds: subscription.componentIds,
+          channelType: "email",
+          email: subscription.email,
+          token: subscription.token,
+          acceptedAt: subscription.acceptedAt ?? undefined,
+        },
+        getSubscriptionVerifyUrl(subscription),
+      );
 
       return { id: subscription.id, token: subscription.token };
     }),
@@ -1316,7 +1359,8 @@ export const statusPageRouter = createTRPCRouter({
       if (!opts.input.slug) return null;
 
       const _page = await opts.ctx.db.query.page.findFirst({
-        where: sql`lower(${page.slug}) = ${opts.input.slug} OR lower(${page.customDomain}) = ${opts.input.slug}`,
+        where:
+          sql`lower(${page.slug}) = ${opts.input.slug} OR lower(${page.customDomain}) = ${opts.input.slug}`,
       });
 
       if (!_page) {
@@ -1384,7 +1428,8 @@ export const statusPageRouter = createTRPCRouter({
       if (!opts.input.slug) return null;
 
       const _page = await opts.ctx.db.query.page.findFirst({
-        where: sql`lower(${page.slug}) = ${opts.input.slug} OR lower(${page.customDomain}) = ${opts.input.slug}`,
+        where:
+          sql`lower(${page.slug}) = ${opts.input.slug} OR lower(${page.customDomain}) = ${opts.input.slug}`,
       });
 
       if (!_page) {
@@ -1423,7 +1468,8 @@ export const statusPageRouter = createTRPCRouter({
     )
     .query(async (opts) => {
       const _page = await opts.ctx.db.query.page.findFirst({
-        where: sql`lower(${page.slug}) = ${opts.input.slug} OR lower(${page.customDomain}) = ${opts.input.slug}`,
+        where:
+          sql`lower(${page.slug}) = ${opts.input.slug} OR lower(${page.customDomain}) = ${opts.input.slug}`,
         columns: { password: true, accessType: true },
       });
       if (!_page || _page.accessType !== "password") return false;

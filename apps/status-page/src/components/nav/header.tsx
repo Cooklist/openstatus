@@ -1,7 +1,7 @@
 "use client";
 
 import type { RouterOutputs } from "@openstatus/api";
-import { Menu, Chat } from "@openstatus/icons";
+import { Chat, Menu } from "@openstatus/icons";
 import { StatusPageGetInTouchIcon } from "@openstatus/ui/components/blocks/status-page-get-in-touch";
 import {
   StatusPageHeader,
@@ -23,19 +23,17 @@ import {
 } from "@openstatus/ui/components/ui/sheet";
 import { cn } from "@openstatus/ui/lib/utils";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { isTRPCClientError } from "@trpc/client";
 import { useExtracted } from "next-intl";
 import NextLink from "next/link";
 import { useParams, usePathname } from "next/navigation";
 import { useState } from "react";
-import { toast } from "sonner";
 
 import { usePathnamePrefix } from "../../hooks/use-pathname-prefix";
 import { useTRPC } from "../../lib/trpc/client";
 import { Link } from "../common/link";
 import {
-  type StatusUpdateType,
   StatusUpdates,
+  type StatusUpdateType,
 } from "../status-page/status-updates";
 
 type Page = RouterOutputs["statusPage"]["get"];
@@ -94,28 +92,8 @@ export function Header({
   });
   const prefix = usePathnamePrefix();
 
-  const sendPageSubscriptionMutation = useMutation(
-    trpc.emailRouter.sendPageSubscriptionVerification.mutationOptions({}),
-  );
-
   const subscribeMutation = useMutation(
-    trpc.statusPage.subscribe.mutationOptions({
-      onSuccess: (data) => {
-        if (!data?.id || !data?.token) return;
-        sendPageSubscriptionMutation.mutate(
-          { id: data.id, token: data.token },
-          {
-            onError: (error) => {
-              if (isTRPCClientError(error)) {
-                toast.error(error.message);
-              } else {
-                toast.error(t("Failed to subscribe"));
-              }
-            },
-          },
-        );
-      },
-    }),
+    trpc.statusPage.subscribe.mutationOptions({}),
   );
 
   return (
@@ -133,30 +111,34 @@ export function Header({
                 target={page?.homepageUrl ? "_blank" : undefined}
                 rel={page?.homepageUrl ? "noreferrer" : undefined}
               >
-                {page?.icon ? (
-                  <img
-                    src={page.icon}
-                    alt={`${page.title} status page`}
-                    className="size-8"
-                  />
-                ) : (
-                  // NOTE: show the first two letters of the title and if its multiple words, show the first letter of the first two words
-                  <StatusPageHeaderBrandFallback title={page?.title} />
-                )}
+                {page?.icon
+                  ? (
+                    <img
+                      src={page.icon}
+                      alt={`${page.title} status page`}
+                      className="size-8"
+                    />
+                  )
+                  : (
+                    // NOTE: show the first two letters of the title and if its multiple words, show the first letter of the first two words
+                    <StatusPageHeaderBrandFallback title={page?.title} />
+                  )}
               </Link>
             </StatusPageHeaderBrandButton>
           </div>
         </StatusPageHeaderBrand>
         <NavDesktop className="hidden md:flex" />
         <StatusPageHeaderActions>
-          {page?.contactUrl ? (
-            <StatusPageGetInTouchIcon>
-              <a href={page.contactUrl} target="_blank" rel="noreferrer">
-                <Chat />
-                <span className="sr-only">{t("Get in touch")}</span>
-              </a>
-            </StatusPageGetInTouchIcon>
-          ) : null}
+          {page?.contactUrl
+            ? (
+              <StatusPageGetInTouchIcon>
+                <a href={page.contactUrl} target="_blank" rel="noreferrer">
+                  <Chat />
+                  <span className="sr-only">{t("Get in touch")}</span>
+                </a>
+              </StatusPageGetInTouchIcon>
+            )
+            : null}
           <StatusUpdates
             types={getStatusUpdateTypes(page)}
             onSubscribe={async (values) => {

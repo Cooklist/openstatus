@@ -47,6 +47,16 @@ describe("applyPageSlugPrefix", () => {
     );
   });
 
+  test("does not duplicate the slug when a custom-domain request already has it", () => {
+    const route: ResolvedRoute = {
+      ...customDomainRoute,
+      rewritePath: "/status.acme.com/en/acme/en",
+    };
+    expect(applyPageSlugPrefix(route, { slug: "acme" }).rewritePath).toBe(
+      "/acme/en",
+    );
+  });
+
   test("no rest segments: no trailing slash", () => {
     expect(
       applyPageSlugPrefix(customDomainRoute, { slug: "acme" }).rewritePath,

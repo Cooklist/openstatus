@@ -19,9 +19,13 @@ export function applyPageSlugPrefix(
 
   // resolveRoute always builds rewritePath as ["", prefix, locale, ...rest]
   const [, , , ...rest] = route.rewritePath.split("/");
+  const pagePrefix = `/${page.slug}/${route.locale}`;
+  const pagePrefixIndex = route.rewritePath.indexOf(pagePrefix);
   return {
     ...route,
     prefix: page.slug,
-    rewritePath: `/${page.slug}/${route.locale}${rest.length ? `/${rest.join("/")}` : ""}`,
+    rewritePath: pagePrefixIndex >= 0
+      ? route.rewritePath.slice(pagePrefixIndex)
+      : `${pagePrefix}${rest.length ? `/${rest.join("/")}` : ""}`,
   };
 }

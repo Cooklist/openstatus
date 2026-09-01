@@ -24,8 +24,9 @@ export function applyPageSlugPrefix(
   return {
     ...route,
     prefix: page.slug,
-    rewritePath: pagePrefixIndex >= 0
-      ? route.rewritePath.slice(pagePrefixIndex)
-      : `${pagePrefix}${rest.length ? `/${rest.join("/")}` : ""}`,
+    rewritePath:
+      pagePrefixIndex >= 0
+        ? route.rewritePath.slice(pagePrefixIndex)
+        : `${pagePrefix}${rest.length ? `/${rest.join("/")}` : ""}`,
   };
 }

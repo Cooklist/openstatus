@@ -39,7 +39,8 @@ const NON_RETRYABLE_RESEND_ERRORS = new Set<string>([
   "validation_error",
 ]);
 
-const defaultNotificationFrom = "OpenStatus <notifications@notifications.openstatus.dev>";
+const defaultNotificationFrom =
+  "OpenStatus <notifications@notifications.openstatus.dev>";
 
 function notificationFrom(displayName?: string): string {
   const configuredFrom = process.env.OPENSTATUS_EMAIL_FROM?.trim();

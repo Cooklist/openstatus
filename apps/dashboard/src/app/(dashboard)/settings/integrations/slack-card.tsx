@@ -20,9 +20,11 @@ import {
 import { useTRPC } from "@/lib/trpc/client";
 
 const SERVER_URL =
-  process.env.NODE_ENV === "production"
-    ? "https://api.openstatus.dev"
-    : "http://localhost:3000";
+  process.env.NEXT_PUBLIC_SELF_HOST === "true"
+    ? ""
+    : process.env.NODE_ENV === "production"
+      ? "https://api.openstatus.dev"
+      : "http://localhost:3000";
 
 interface SlackIntegrationCardProps {
   locked?: boolean;

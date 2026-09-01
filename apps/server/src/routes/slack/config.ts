@@ -27,6 +27,8 @@ export type SlackEnv = {
 };
 
 export function slackConfigFromEnv(): SlackConfig {
+  const dashboardUrl = process.env.NEXT_PUBLIC_URL?.trim();
+
   return {
     signingSecret: env.SLACK_SIGNING_SECRET,
     clientId: env.SLACK_CLIENT_ID,
@@ -34,8 +36,9 @@ export function slackConfigFromEnv(): SlackConfig {
     redirectUri: env.SLACK_REDIRECT_URI,
     aiGatewayApiKey: env.AI_GATEWAY_API_KEY,
     dashboardUrl:
-      env.NODE_ENV === "production"
+      dashboardUrl ||
+      (env.NODE_ENV === "production"
         ? "https://app.openstatus.dev"
-        : "http://localhost:3000",
+        : "http://localhost:3000"),
   };
 }

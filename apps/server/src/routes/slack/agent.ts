@@ -1,3 +1,4 @@
+import { resolveChatModel } from "@openstatus/ai";
 import type { Workspace } from "@openstatus/db/src/schema/workspaces/validation";
 import type { ServiceContext } from "@openstatus/services";
 import { generateText, stepCountIs } from "ai";
@@ -14,7 +15,10 @@ import { buildSystemPrompt } from "./system-prompt";
 const DEFAULT_MODEL = "anthropic/claude-sonnet-4.6";
 // `||` (not `??`) so empty / whitespace-only env values fall back to the
 // default rather than being passed through to `generateText`.
-const MODEL = process.env.SLACK_AGENT_MODEL?.trim() || DEFAULT_MODEL;
+const GATEWAY_MODEL = process.env.SLACK_AGENT_MODEL?.trim() || DEFAULT_MODEL;
+const USE_SELF_HOSTED_MODEL = Boolean(
+  process.env.AI_BASE_URL?.trim() && process.env.AI_MODEL?.trim(),
+);
 
 interface SlackThreadMessage {
   user?: string;
@@ -63,6 +67,13 @@ export async function runAgent(
   userText?: string,
   origin?: { slackUserId: string; teamId: string | undefined },
 ): Promise<AgentResult> {
+  const model = USE_SELF_HOSTED_MODEL
+    ? resolveChatModel({ plan: workspace.plan })
+    : GATEWAY_MODEL;
+  if (!model) {
+    throw new Error("Slack agent AI model is not configured");
+  }
+
   const ctx: ServiceContext = {
     workspace,
     actor: {
@@ -90,7 +101,7 @@ export async function runAgent(
   }
 
   const result = await generateText({
-    model: MODEL,
+    model,
     system: buildSystemPrompt(workspace.name ?? "Unknown"),
     messages,
     tools,

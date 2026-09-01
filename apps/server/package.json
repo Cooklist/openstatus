@@ -27,6 +27,7 @@
     "@logtape/otel": "catalog:",
     "@logtape/sentry": "catalog:",
     "@modelcontextprotocol/sdk": "catalog:",
+    "@openstatus/ai": "workspace:*",
     "@openstatus/analytics": "workspace:*",
     "@openstatus/assertions": "workspace:*",
     "@openstatus/db": "workspace:*",

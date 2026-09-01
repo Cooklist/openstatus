@@ -931,6 +931,9 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: 'catalog:'
         version: 1.29.0(zod@4.1.13)
+      '@openstatus/ai':
+        specifier: workspace:*
+        version: link:../../packages/ai
       '@openstatus/analytics':
         specifier: workspace:*
         version: link:../../packages/analytics

@@ -12,7 +12,7 @@ export function createSlackRoute(config: SlackConfig) {
 
   slack.use("*", async (c, next) => {
     c.set("slackConfig", config);
-    if (!config.signingSecret || !config.aiGatewayApiKey) {
+    if (!config.signingSecret || !config.aiConfigured) {
       return c.json({ error: "Slack agent not configured" }, 503);
     }
     await next();

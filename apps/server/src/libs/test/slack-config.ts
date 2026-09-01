@@ -8,7 +8,7 @@ export const TEST_SLACK_CONFIG: SlackConfig = {
   signingSecret: TEST_SIGNING_SECRET,
   clientId: "test-client-id",
   clientSecret: "test-client-secret",
-  aiGatewayApiKey: "test-key",
+  aiConfigured: true,
   dashboardUrl: "http://localhost:3000",
 };
 

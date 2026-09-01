@@ -30,7 +30,7 @@ function makeInstallToken(workspaceId: number): string {
 const BASE_CONFIG: SlackConfig = {
   signingSecret: SIGNING_SECRET,
   clientId: "test-client-id",
-  aiGatewayApiKey: "test-key",
+  aiConfigured: true,
   dashboardUrl: "http://localhost:3000",
 };
 
@@ -51,8 +51,8 @@ describe("slack route middleware", () => {
     expect(json.error).toBe("Slack agent not configured");
   });
 
-  test("returns 503 when AI_GATEWAY_API_KEY is missing", async () => {
-    const app = makeApp({ aiGatewayApiKey: "" });
+  test("returns 503 when AI is not configured", async () => {
+    const app = makeApp({ aiConfigured: false });
 
     const res = await app.request("/slack/install?token=invalid");
 

@@ -14,7 +14,7 @@ export type SlackConfig = {
   clientId?: string;
   clientSecret?: string;
   redirectUri?: string;
-  aiGatewayApiKey?: string;
+  aiConfigured: boolean;
   dashboardUrl: string;
 };
 
@@ -34,7 +34,10 @@ export function slackConfigFromEnv(): SlackConfig {
     clientId: env.SLACK_CLIENT_ID,
     clientSecret: env.SLACK_CLIENT_SECRET,
     redirectUri: env.SLACK_REDIRECT_URI,
-    aiGatewayApiKey: env.AI_GATEWAY_API_KEY,
+    aiConfigured: Boolean(
+      env.AI_GATEWAY_API_KEY ||
+      (process.env.AI_BASE_URL?.trim() && process.env.AI_MODEL?.trim()),
+    ),
     dashboardUrl:
       dashboardUrl ||
       (env.NODE_ENV === "production"

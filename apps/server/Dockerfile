@@ -14,6 +14,7 @@ RUN \
     --mount=type=bind,target=pnpm-lock.yaml,source=pnpm-lock.yaml \
     --mount=type=bind,target=package.json,source=package.json \
     --mount=type=bind,target=apps/server/package.json,source=apps/server/package.json \
+    --mount=type=bind,target=packages/ai/package.json,source=packages/ai/package.json \
     --mount=type=bind,target=packages/analytics/package.json,source=packages/analytics/package.json \
     --mount=type=bind,target=packages/db/package.json,source=packages/db/package.json \
     --mount=type=bind,target=packages/proto/package.json,source=packages/proto/package.json \

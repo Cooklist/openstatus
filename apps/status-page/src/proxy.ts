@@ -51,7 +51,7 @@ export default auth(async (req) => {
     accept: req.headers.get("accept"),
   });
 
-  const initialRoute = resolveRoute({
+  let initialRoute = resolveRoute({
     host,
     urlHost: url.host,
     pathname,
@@ -75,15 +75,39 @@ export default auth(async (req) => {
     });
   }
 
-  const query = await db
-    .select()
-    .from(page)
-    .where(
-      sql`lower(${page.slug}) = ${initialRoute.prefix} OR lower(${page.customDomain}) = ${initialRoute.prefix}`,
-    )
-    .get();
+  const findPage = (prefix: string) =>
+    db
+      .select()
+      .from(page)
+      .where(
+        sql`lower(${page.slug}) = ${prefix} OR lower(${page.customDomain}) = ${prefix}`,
+      )
+      .get();
 
-  const validation = selectPageSchema.safeParse(query);
+  let validation = selectPageSchema.safeParse(
+    await findPage(initialRoute.prefix),
+  );
+
+  // Self-hosted installations commonly expose the same page through multiple
+  // cluster-specific hosts. If a host is not a configured custom domain, allow
+  // the explicit /{slug}/... route instead of treating the hostname as a tenant.
+  if (!validation.success && isSelfHosted) {
+    const pathnameRoute = resolveRoute({
+      host,
+      urlHost: url.host,
+      pathname,
+      forcePathname: true,
+    });
+    if (pathnameRoute) {
+      const pathnameValidation = selectPageSchema.safeParse(
+        await findPage(pathnameRoute.prefix),
+      );
+      if (pathnameValidation.success) {
+        initialRoute = pathnameRoute;
+        validation = pathnameValidation;
+      }
+    }
+  }
 
   // No page for this host/slug — never fall through to the theme explorer.
   if (!validation.success) {

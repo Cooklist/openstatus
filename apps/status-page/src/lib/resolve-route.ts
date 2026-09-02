@@ -21,6 +21,7 @@ export function resolveRoute({
   host,
   urlHost,
   pathname,
+  forcePathname = false,
 }: {
   /** x-forwarded-host header value */
   host: string | null;
@@ -28,6 +29,8 @@ export function resolveRoute({
   urlHost: string;
   /** req.nextUrl.pathname */
   pathname: string;
+  /** Resolve the slug from the path even when the request host is dotted. */
+  forcePathname?: boolean;
 }): ResolvedRoute | null {
   const hostnames = host?.split(/[.:]/) ?? urlHost.split(/[.:]/);
   const pathnames = pathname.split("/");
@@ -40,6 +43,7 @@ export function resolveRoute({
   let type: RouteType;
 
   if (
+    !forcePathname &&
     hostnames.length > 2 &&
     hostnames[0] !== "www" &&
     !urlHost.endsWith(".vercel.app")
@@ -51,7 +55,7 @@ export function resolveRoute({
     type = "pathname";
   }
 
-  if (subdomain !== null) {
+  if (!forcePathname && subdomain !== null) {
     prefix = subdomain.toLowerCase();
     // Host-keyed: the path carries no slug. Apex (`acme.com`) and `www.` custom
     // domains fail the label check above, and reading their first segment as the

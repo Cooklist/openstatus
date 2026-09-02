@@ -25,12 +25,13 @@ export function resolvePathnamePrefix({
   // localhost:3000 → ["localhost:3000"] (length 1, pathname routing)
   const hasLocalhostSubdomain =
     hostnames.length === 2 && /^localhost(:\d+)?$/.test(hostnames[1]);
-  const isSubdomain =
-    (hostnames.length > 2 || hasLocalhostSubdomain) &&
-    hostnames[0] !== "www" &&
-    !hostname.endsWith(".vercel.app");
+  const isHostedSubdomain =
+    (hostname.endsWith(".openstatus.dev") ||
+      hostname.endsWith(".stpg.dev") ||
+      hasLocalhostSubdomain) &&
+    hostnames[0] !== "www";
 
-  if (isCustomDomain || isSubdomain) {
+  if (isCustomDomain || isHostedSubdomain) {
     // Subdomain or custom domain — no slug prefix needed
     return locale !== defaultLocale ? locale : "";
   }

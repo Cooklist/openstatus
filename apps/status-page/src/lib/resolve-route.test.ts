@@ -97,6 +97,22 @@ describe("resolveRoute", () => {
   });
 
   describe("pathname routing (path-based)", () => {
+    test("self-host alias can force /{slug} routing on a dotted host", () => {
+      const result = resolveRoute({
+        host: "stage-status.gcp.cooklist.com",
+        urlHost: "stage-status.gcp.cooklist.com",
+        pathname: "/cooklist/en/events",
+        forcePathname: true,
+      });
+      expect(result).toEqual({
+        type: "pathname",
+        prefix: "cooklist",
+        locale: "en",
+        localeExplicit: true,
+        rewritePath: "/cooklist/en/events",
+      });
+    });
+
     test("localhost:3000/acme/en → /acme/en", () => {
       const result = resolveRoute({
         host: "localhost:3000",

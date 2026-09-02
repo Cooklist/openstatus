@@ -157,6 +157,18 @@ describe("resolvePathnamePrefix", () => {
   });
 
   describe("edge cases", () => {
+    test("self-host alias without a custom domain keeps the slug prefix", () => {
+      expect(
+        resolvePathnamePrefix({
+          hostname: "stage-status.gcp.cooklist.com",
+          pathname: "/cooklist/en/monitors/1",
+          customDomain: undefined,
+          locale: "en",
+          defaultLocale,
+        }),
+      ).toBe("cooklist/en");
+    });
+
     test("www subdomain is treated as pathname routing", () => {
       expect(
         resolvePathnamePrefix({

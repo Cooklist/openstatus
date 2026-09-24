@@ -28,6 +28,7 @@ export async function subscribeSelfSignupSubscriber(args: {
 
   const subscription = await upsertSelfSignupSubscriber({
     input,
+    visitor: null,
     db: args.db,
     claimVerification: true,
   });

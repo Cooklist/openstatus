@@ -8,6 +8,7 @@ import { headers } from "next/headers";
 import { cache } from "react";
 
 import { adapter } from "./adapter";
+import { logger } from "./logger";
 import {
   GitHubProvider,
   GoogleProvider,
@@ -51,6 +52,7 @@ const {
 } = NextAuth({
   // debug: true,
   adapter,
+  logger,
   providers: [
     GitHubProvider,
     GoogleProvider,
@@ -155,8 +157,8 @@ const {
       if (params.user.tenantId) return;
 
       await sendEmail({
-        from: "Thibault from OpenStatus <thibault@openstatus.dev>",
-        subject: "Welcome to OpenStatus.",
+        from: "Thibault from openstatus <thibault@openstatus.dev>",
+        subject: "Welcome to openstatus.",
         to: [params.user.email],
         react: WelcomeEmail(),
       });

@@ -3,11 +3,12 @@ import type { Metadata } from "next";
 import type { MDXData } from "../../content/utils";
 
 export const TITLE = "openstatus";
-export const HOMEPAGE_TITLE = "Free & Open Source Status Page ";
+export const HOMEPAGE_TITLE =
+  "Free & Open Source Status Page and Uptime Monitoring";
 export const DESCRIPTION =
-  "Ship your status page before your SOC 2 auditor asks for it. Open source, free to start, self-hostable.";
+  "Open source status page and uptime monitoring. Keep it in code, let your agents update it. Free to start, self-hostable.";
 
-export const OG_DESCRIPTION = "The status page for compliance-ready teams";
+export const OG_DESCRIPTION = "The status page for humans and agents";
 
 export const BASE_URL =
   process.env.NODE_ENV === "production"

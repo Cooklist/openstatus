@@ -3,6 +3,14 @@
 Every workspace-scoped mutation lives here, not in a tRPC router or a Hono
 handler. Routers validate input, call a verb, map errors.
 
+One documented exception: the checker ingest path
+(`apps/workflows/src/checker/transition.ts`) writes `monitor_status`,
+`incident` and the outbox directly. `ServiceContext` requires a `Workspace` that
+path would have to load on every check, `withTransaction` opens an interactive
+transaction where it needs a single atomic `db.batch()`, and a fail-closed
+`emitAudit` would roll back a real status transition because an audit insert
+failed. Do not "fix" it by routing it through a verb.
+
 ## Shape of a verb
 
 - **One file per verb** under `packages/services/src/<entity>/` (`create.ts`,
@@ -44,6 +52,15 @@ read. `requireScope` is a no-op for `user` / `system` / `slack` / `webhook` /
 `subscriber` actors and active for `apiKey` and `mcp`. MCP tools declare
 `scope` and register through `registerScopedTool`, so read-only keys never see
 write tools.
+
+## Status-page visitor access
+
+`src/page-access` decides whether an anonymous visitor may see a gated page
+(password, email domain, IP range). It is pure — the transport builds a
+`PageVisitor` — and the status-page proxy imports it, so keep it Edge-safe.
+A verb reachable by visitors takes a `visitor` argument and calls
+`assertPageAccess`; `null` is only for callers that already authorized the
+request inside their own workspace.
 
 ## Runtime constraints
 

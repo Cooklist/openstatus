@@ -12,11 +12,13 @@ applies. The existing public representations to mirror are
 `apps/status-page/src/app/api/markdown/[[...path]]` and
 `apps/status-page/src/app/api/status/[[...path]]`.
 
-**Known open leak:** the public tRPC endpoint at `/api/trpc/lambda` serves
-gated page content. `guardTRPCSource` only filters on a spoofable
-`x-trpc-source` header and is explicitly not a security boundary. Do not treat
-it as one, and do not widen the surface until the procedures themselves check
-the gate.
+The gate decision lives in `packages/services/src/page-access`, so every
+transport shares it. The `statusPage` tRPC procedures enforce it themselves:
+`get`/`getLight` return chrome only to a denied caller — login, layout and OG
+still render from them — and the detail procedures throw. A new procedure that
+returns page content must call `assertPageAccess` from
+`packages/api/src/lib/page-access.ts`. `guardTRPCSource` filters on a spoofable
+header and is not a security boundary.
 
 Never log or report tRPC `input` — it carries page passwords and subscriber
 tokens. `sentryLoggerLink` attaches the operation `path` only.
@@ -31,6 +33,17 @@ the page's access type — a gated page must not inherit a public TTL.
 
 Themes come from `@openstatus/theme-store` as OKLCH CSS variables. Add or edit
 a theme in that package; do not hard-code colours in a component.
+
+`--radius` is themed too, and this app overrides it to `0rem`. The scale in
+`packages/ui/src/globals.css` is proportional to it (`xs` 0.2, `rounded` 0.4,
+`sm` 0.6, `md` 0.8, `lg` 1.0, `xl` 1.4), so every step collapses with the theme
+— use the tokens, never a hard-coded `rounded-[4px]`, and prefer `rounded-lg`
+over the equivalent `rounded-(--radius)`. A pill that stays a pill under a
+square theme is the bug. `rounded-full` is only for a chip that wraps a glyph
+(`StatusIcon`); a coloured status marker takes `rounded-lg`, matching the bar it
+describes. The `.rounded-full` override in `globals.css` exists only so
+Tailwind's `9999px` doesn't defeat `--radius: 0` — never add more of those, fix
+the component (see `packages/ui/AGENTS.md`).
 
 ## Impact labels
 

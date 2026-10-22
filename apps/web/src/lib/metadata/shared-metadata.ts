@@ -4,11 +4,12 @@ import type { MDXData } from "../../content/utils";
 
 export const TITLE = "openstatus";
 export const HOMEPAGE_TITLE =
-  "Free & Open Source Status Page and Uptime Monitoring";
+  "Open Source Status Page, Uptime Monitoring & Incident Response";
 export const DESCRIPTION =
-  "Open source status page and uptime monitoring. Keep it in code, let your agents update it. Free to start, self-hostable.";
+  "Open source status page, incident response and global uptime monitoring. When something breaks, your subscribers hear it first and your auditor gets the trail.";
 
-export const OG_DESCRIPTION = "The status page for humans and agents";
+export const OG_DESCRIPTION =
+  "Status pages and incident response for humans and agents";
 
 export const BASE_URL =
   process.env.NODE_ENV === "production"
@@ -117,5 +118,30 @@ export const getPageMetadata = (page: MDXData, basePath?: string): Metadata => {
       modifiedTime: (updatedAt ?? publishedAt).toISOString(),
     },
     twitter,
+  };
+};
+
+// Home sits outside `getPageMetadata`: its canonical is `/`, its title skips
+// the `%s | openstatus` template and its OG card is the static one.
+export const getHomeMetadata = (page: MDXData): Metadata => {
+  const { description, category, seo } = page.metadata;
+  const metaTitle = seo?.title ?? HOMEPAGE_TITLE;
+  const metaDescription = seo?.description ?? description;
+
+  return {
+    ...defaultMetadata,
+    title: { absolute: metaTitle },
+    description: metaDescription,
+    alternates: {
+      canonical: seo?.canonical ?? "/",
+    },
+    ...(seo?.noindex ? { robots: { index: false } } : {}),
+    ...getSocialMetadata({
+      title: metaTitle,
+      description: metaDescription,
+      url: BASE_URL,
+      category,
+      ogImage: seo?.ogImage ?? `${BASE_URL}/api/og`,
+    }),
   };
 };

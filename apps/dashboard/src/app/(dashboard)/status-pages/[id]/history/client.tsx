@@ -47,6 +47,7 @@ import {
   MetricCardValue,
 } from "@/components/metric/metric-card";
 import { DataTable } from "@/components/ui/data-table/data-table";
+import { DataTablePaginationSimple } from "@/components/ui/data-table/data-table-pagination";
 import {
   HISTORY_WINDOWS,
   getColumnVisibility,
@@ -162,14 +163,18 @@ export function Client() {
           <BillingOverlayContainer>
             <div className="overflow-x-auto">
               <DataTable
+                paginationComponent={DataTablePaginationSimple}
                 columns={columns}
                 data={history.rows}
                 columnVisibility={columnVisibility}
-                defaultPagination={{ pageIndex: 0, pageSize: 100 }}
               />
             </div>
             <BillingOverlay>
-              <BillingOverlayButton onClick={() => setOpenDialog(true)}>
+              <BillingOverlayButton
+                data-track="paywall_viewed"
+                data-limit="uptime-history"
+                onClick={() => setOpenDialog(true)}
+              >
                 <Lock />
                 Upgrade
               </BillingOverlayButton>
@@ -186,10 +191,10 @@ export function Client() {
         ) : hasAnyData ? (
           <div className="overflow-x-auto">
             <DataTable
+              paginationComponent={DataTablePaginationSimple}
               columns={columns}
               data={history.rows}
               columnVisibility={columnVisibility}
-              defaultPagination={{ pageIndex: 0, pageSize: 100 }}
             />
           </div>
         ) : (

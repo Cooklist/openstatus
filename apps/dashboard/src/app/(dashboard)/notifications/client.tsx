@@ -25,7 +25,8 @@ import {
 import { columns } from "@/components/data-table/notifications/columns";
 import { FormSheetNotifier } from "@/components/forms/notifications/sheet";
 import { DataTable } from "@/components/ui/data-table/data-table";
-import { config } from "@/data/notifications.client";
+import { DataTablePaginationSimple } from "@/components/ui/data-table/data-table-pagination";
+import { config, hiddenProviders } from "@/data/notifications.client";
 import { useTRPC } from "@/lib/trpc/client";
 
 import { searchParamsParsers } from "./search-params";
@@ -69,7 +70,11 @@ export function Client() {
             <EmptyStateTitle>No notifier found</EmptyStateTitle>
           </EmptyStateContainer>
         ) : (
-          <DataTable columns={columns} data={notifications} />
+          <DataTable
+            paginationComponent={DataTablePaginationSimple}
+            columns={columns}
+            data={notifications}
+          />
         )}
       </Section>
       <Section>
@@ -90,6 +95,7 @@ export function Client() {
         <ActionCardGroup className="grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
           {Object.keys(config).map((notifier) => {
             const key = notifier as keyof typeof config;
+            if (hiddenProviders.has(key)) return null;
             const Icon = config[key].icon;
             let enabled = true;
 

@@ -118,6 +118,7 @@ export function Client() {
         {isLimited ? (
           <BillingOverlayContainer>
             <DataTable
+              paginationComponent={DataTablePaginationSimple}
               columns={columns}
               data={[...EXAMPLES, ...EXAMPLES, ...EXAMPLES]}
               defaultColumnVisibility={{
@@ -130,7 +131,11 @@ export function Client() {
               )}
             />
             <BillingOverlay>
-              <BillingOverlayButton onClick={() => setOpenDialog(true)}>
+              <BillingOverlayButton
+                data-track="paywall_viewed"
+                data-limit="audit-log"
+                onClick={() => setOpenDialog(true)}
+              >
                 <Lock />
                 Upgrade
               </BillingOverlayButton>

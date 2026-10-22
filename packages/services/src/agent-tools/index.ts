@@ -1,9 +1,29 @@
 import type { z } from "zod";
 
+import { isFeatureEnabled } from "../features";
+import type { Workspace } from "../types";
 import { getAuditLogTool, listAuditLogsTool } from "./audit";
 import { getContentPageTool, searchContentTool } from "./content";
 import { getDocPageTool, searchDocsTool } from "./docs";
-import { createMaintenanceTool, listMaintenancesTool } from "./maintenance";
+import {
+  addIncidentNoteTool,
+  approvePostmortemTool,
+  declareIncidentTool,
+  draftPostmortemTool,
+  getIncidentTool,
+  getPostmortemTool,
+  listIncidentsTool,
+  resolveIncidentTool,
+  setIncidentStatusTool,
+  updateIncidentTool,
+} from "./incident";
+import {
+  addMaintenanceUpdateTool,
+  createMaintenanceTool,
+  deleteMaintenanceUpdateTool,
+  listMaintenancesTool,
+  updateMaintenanceUpdateTool,
+} from "./maintenance";
 import {
   getMonitorStatusTool,
   getMonitorSummaryTool,
@@ -19,16 +39,37 @@ import { listPrivateLocationsTool } from "./private-location";
 import {
   addStatusReportUpdateTool,
   createStatusReportTool,
+  deleteStatusReportUpdateTool,
+  getStatusReportTool,
   listStatusReportsTool,
   resolveStatusReportTool,
   updateStatusReportTool,
+  updateStatusReportUpdateTool,
 } from "./status-report";
 import type { AnyAgentTool } from "./types";
 
 export { getAuditLogTool, listAuditLogsTool } from "./audit";
 export { getContentPageTool, searchContentTool } from "./content";
 export { getDocPageTool, searchDocsTool } from "./docs";
-export { createMaintenanceTool, listMaintenancesTool } from "./maintenance";
+export {
+  addIncidentNoteTool,
+  approvePostmortemTool,
+  declareIncidentTool,
+  draftPostmortemTool,
+  getIncidentTool,
+  getPostmortemTool,
+  listIncidentsTool,
+  resolveIncidentTool,
+  setIncidentStatusTool,
+  updateIncidentTool,
+} from "./incident";
+export {
+  addMaintenanceUpdateTool,
+  createMaintenanceTool,
+  deleteMaintenanceUpdateTool,
+  listMaintenancesTool,
+  updateMaintenanceUpdateTool,
+} from "./maintenance";
 export {
   getMonitorStatusTool,
   getMonitorSummaryTool,
@@ -44,9 +85,12 @@ export { listPrivateLocationsTool } from "./private-location";
 export {
   addStatusReportUpdateTool,
   createStatusReportTool,
+  deleteStatusReportUpdateTool,
+  getStatusReportTool,
   listStatusReportsTool,
   resolveStatusReportTool,
   updateStatusReportTool,
+  updateStatusReportUpdateTool,
 } from "./status-report";
 export type {
   AgentTool,
@@ -78,12 +122,28 @@ export const agentTools = {
   list_status_pages: listStatusPagesTool,
   list_page_components: listPageComponentsTool,
   list_status_reports: listStatusReportsTool,
+  get_status_report: getStatusReportTool,
   create_status_report: createStatusReportTool,
   add_status_report_update: addStatusReportUpdateTool,
   update_status_report: updateStatusReportTool,
   resolve_status_report: resolveStatusReportTool,
+  update_status_report_update: updateStatusReportUpdateTool,
+  delete_status_report_update: deleteStatusReportUpdateTool,
+  list_incidents: listIncidentsTool,
+  get_incident: getIncidentTool,
+  declare_incident: declareIncidentTool,
+  update_incident: updateIncidentTool,
+  resolve_incident: resolveIncidentTool,
+  set_incident_status: setIncidentStatusTool,
+  add_incident_note: addIncidentNoteTool,
+  get_postmortem: getPostmortemTool,
+  draft_postmortem: draftPostmortemTool,
+  approve_postmortem: approvePostmortemTool,
   list_maintenances: listMaintenancesTool,
   create_maintenance: createMaintenanceTool,
+  add_maintenance_update: addMaintenanceUpdateTool,
+  update_maintenance_update: updateMaintenanceUpdateTool,
+  delete_maintenance_update: deleteMaintenanceUpdateTool,
   list_monitors: listMonitorsTool,
   get_monitor: getMonitorTool,
   get_monitor_status: getMonitorStatusTool,
@@ -114,6 +174,14 @@ for (const tool of Object.values(agentTools) as AnyAgentTool[]) {
       `agent-tools: "${tool.name}" declares extraFlags but no applyFlags.`,
     );
   }
+}
+
+/** Whether a tool is offered in this workspace (feature-gated tools are hidden). */
+export function isAgentToolAvailable(
+  tool: AnyAgentTool,
+  workspace: Pick<Workspace, "id">,
+): boolean {
+  return !tool.feature || isFeatureEnabled(workspace, tool.feature);
 }
 
 /**

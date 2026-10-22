@@ -28,6 +28,7 @@ import {
   MetricCardValue,
 } from "@/components/metric/metric-card";
 import { DataTable } from "@/components/ui/data-table/data-table";
+import { DataTablePaginationSimple } from "@/components/ui/data-table/data-table-pagination";
 import { buildOverviewData } from "@/data/overview-events.client";
 import { useTRPC } from "@/lib/trpc/client";
 
@@ -39,22 +40,42 @@ export default function Page() {
   const { data: monitors } = useQuery(trpc.monitor.list.queryOptions());
   const { data: pages } = useQuery(trpc.page.list.queryOptions());
   // no period — an incident open for weeks must still surface here
-  const { data: incidents } = useQuery(trpc.incident.list.queryOptions());
+  const { data: monitorIncidents } = useQuery(
+    trpc.monitorIncident.list.queryOptions(),
+  );
   const { data: statusReports } = useQuery(
     trpc.statusReport.list.queryOptions({}),
   );
   const { data: maintenances } = useQuery(trpc.maintenance.list.queryOptions());
+  const { data: openIncidents, isPending: openIncidentsPending } = useQuery(
+    trpc.incident.list.queryOptions({ status: ["open", "mitigated"] }),
+  );
+  const { data: endedIncidents, isPending: endedIncidentsPending } = useQuery(
+    trpc.incident.list.queryOptions({ status: ["resolved", "canceled"] }),
+  );
 
-  if (!monitors || !pages || !incidents || !statusReports || !maintenances)
+  if (
+    !monitors ||
+    !pages ||
+    !monitorIncidents ||
+    !statusReports ||
+    !maintenances ||
+    // wait for the incident queries; a failed one still renders (see below)
+    openIncidentsPending ||
+    endedIncidentsPending
+  )
     return null;
 
   const { needsAttention, upcomingMaintenances, recentlyResolved, metrics } =
     buildOverviewData({
       monitors,
       pages,
-      incidents,
+      monitorIncidents,
       statusReports,
       maintenances,
+      // undefined on a failed query — falls back to the downtime count
+      managedIncidents: openIncidents,
+      endedIncidents,
     });
 
   return (
@@ -114,6 +135,7 @@ export default function Page() {
         </SectionHeader>
         {needsAttention.length > 0 ? (
           <DataTable
+            paginationComponent={DataTablePaginationSimple}
             columns={columns}
             data={needsAttention}
             defaultSorting={[{ id: "startedAt", desc: true }]}
@@ -136,6 +158,7 @@ export default function Page() {
             </SectionDescription>
           </SectionHeader>
           <DataTable
+            paginationComponent={DataTablePaginationSimple}
             columns={columns}
             data={upcomingMaintenances}
             defaultSorting={[{ id: "startedAt", desc: false }]}
@@ -153,6 +176,7 @@ export default function Page() {
         </SectionHeader>
         {recentlyResolved.length > 0 ? (
           <DataTable
+            paginationComponent={DataTablePaginationSimple}
             columns={columns}
             data={recentlyResolved}
             defaultSorting={[{ id: "startedAt", desc: true }]}

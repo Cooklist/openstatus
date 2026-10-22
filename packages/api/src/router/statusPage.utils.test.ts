@@ -1,12 +1,11 @@
 import type {
-  Incident,
+  MonitorIncident,
   Maintenance,
   PageComponent,
   StatusReport,
   StatusReportUpdate,
 } from "@openstatus/db/src/schema";
-import { expect } from "@std/expect";
-import { describe, it } from "@std/testing/bdd";
+import { describe, expect, it } from "vitest";
 
 import {
   currentImpactByComponent,
@@ -1081,6 +1080,8 @@ describe("getEvents - pageComponent filtering", () => {
       to,
       workspaceId: 1,
       pageId: 1,
+      createdBy: null,
+      updatedBy: null,
       createdAt: new Date(),
       updatedAt: new Date(),
       maintenancesToPageComponents: pageComponentIds.map((pcId) => ({
@@ -1109,6 +1110,8 @@ describe("getEvents - pageComponent filtering", () => {
       status,
       workspaceId: 1,
       pageId: 1,
+      createdBy: null,
+      updatedBy: null,
       createdAt: new Date(),
       updatedAt: new Date(),
       statusReportsToPageComponents: pageComponentIds.map((pcId) => ({
@@ -1121,6 +1124,8 @@ describe("getEvents - pageComponent filtering", () => {
           date: updateDate,
           status: "investigating",
           message: "Investigating the issue",
+          createdBy: null,
+          updatedBy: null,
           createdAt: new Date(),
           updatedAt: new Date(),
         },
@@ -1129,7 +1134,7 @@ describe("getEvents - pageComponent filtering", () => {
   }
 
   // Helper to create a mock incident
-  function createMockIncident(id: number, monitorId: number): Incident {
+  function createMockIncident(id: number, monitorId: number): MonitorIncident {
     const now = new Date();
     const startedAt = new Date(now.getTime() - 1000 * 60 * 60); // 1 hour ago
 
@@ -1377,6 +1382,8 @@ describe("componentImpacts", () => {
       status: args.status ?? ("investigating" as const),
       workspaceId: 1,
       pageId: 1,
+      createdBy: null,
+      updatedBy: null,
       createdAt: new Date(),
       updatedAt: new Date(),
       statusReportsToPageComponents: args.components.map((pcId) => ({
@@ -1388,6 +1395,8 @@ describe("componentImpacts", () => {
         date: u.date,
         status: u.status,
         message: "m",
+        createdBy: null,
+        updatedBy: null,
         createdAt: new Date(),
         updatedAt: new Date(),
         statusReportUpdateToPageComponents: (u.impacts ?? []).map((r) => ({
@@ -1736,6 +1745,151 @@ describe("componentImpacts", () => {
           cardType: "duration",
         }),
       ).toBe("75%");
+    });
+  });
+
+  describe("getUptime - duration mode probe downtime", () => {
+    const day2 = dayStartUTC(2);
+    // day 2: 6 of 24 hourly checks failed; day 1: all ok
+    const twoDayData = [createStatusData(2, 18, 0, 6), createStatusData(1, 24)];
+    const incident = {
+      id: 1,
+      name: "Downtime",
+      from: hoursAfter(day2, 6),
+      to: hoursAfter(day2, 12),
+      type: "incident" as const,
+      status: "error" as const,
+    };
+
+    it("public monitor: incident covering the failed checks counts once", () => {
+      // pre-fix the day-wide probe weight stacked on the incident: 10.5h/48h
+      expect(
+        getUptime({
+          data: twoDayData,
+          events: [incident],
+          barType: "absolute",
+          cardType: "duration",
+        }),
+      ).toBe("87.5%");
+    });
+
+    it("public monitor: failed checks without an incident do not count", () => {
+      expect(
+        getUptime({
+          data: twoDayData,
+          events: [],
+          barType: "absolute",
+          cardType: "duration",
+        }),
+      ).toBe("100%");
+    });
+
+    it("private-only monitor: failed checks count since probes never open incidents", () => {
+      expect(
+        getUptime({
+          data: twoDayData,
+          events: [],
+          barType: "absolute",
+          cardType: "duration",
+          privateLocationOnly: true,
+        }),
+      ).toBe("87.5%");
+    });
+
+    it("private-only monitor: incident covering the failed checks counts once", () => {
+      const fullDay = { ...incident, from: day2, to: hoursAfter(day2, 24) };
+      expect(
+        getUptime({
+          data: twoDayData,
+          events: [fullDay],
+          barType: "absolute",
+          cardType: "duration",
+          privateLocationOnly: true,
+        }),
+      ).toBe("50%");
+    });
+
+    it("private-only monitor: incident on another day adds to the failed checks", () => {
+      const day1 = dayStartUTC(1);
+      const other = { ...incident, from: day1, to: hoursAfter(day1, 12) };
+      // 6h probe (day 2) + 12h incident (day 1) = 18h / 48h
+      expect(
+        getUptime({
+          data: twoDayData,
+          events: [other],
+          barType: "absolute",
+          cardType: "duration",
+          privateLocationOnly: true,
+        }),
+      ).toBe("62.5%");
+    });
+
+    it("private-only monitor: worst weight wins between a report and failed checks", () => {
+      // partial_outage (0.5) across day 2 outweighs the 0.25 probe error ratio
+      const events = [
+        createImpactEvent(1, day2, hoursAfter(day2, 24), [
+          { from: day2, to: hoursAfter(day2, 24), impact: "partial_outage" },
+        ]),
+      ];
+      expect(
+        getUptime({
+          data: twoDayData,
+          events,
+          barType: "absolute",
+          cardType: "duration",
+          privateLocationOnly: true,
+        }),
+      ).toBe("75%");
+    });
+
+    it("private-only monitor: degraded checks count as up", () => {
+      expect(
+        getUptime({
+          data: [createStatusData(2, 18, 6, 0), createStatusData(1, 24)],
+          events: [],
+          barType: "absolute",
+          cardType: "duration",
+          privateLocationOnly: true,
+        }),
+      ).toBe("100%");
+    });
+
+    it("private-only monitor: a day without checks adds no downtime", () => {
+      expect(
+        getUptime({
+          data: [createStatusData(2, 0, 0, 0), createStatusData(1, 24)],
+          events: [],
+          barType: "absolute",
+          cardType: "duration",
+          privateLocationOnly: true,
+        }),
+      ).toBe("100%");
+    });
+
+    it("flag is ignored in requests mode", () => {
+      for (const privateLocationOnly of [true, false]) {
+        expect(
+          getUptime({
+            data: twoDayData,
+            events: [],
+            barType: "absolute",
+            cardType: "requests",
+            privateLocationOnly,
+          }),
+        ).toBe("87.5%");
+      }
+    });
+
+    it("flag is ignored in manual mode: reports only", () => {
+      expect(
+        getUptime({
+          data: twoDayData,
+          events: [incident],
+          barType: "manual",
+          cardType: "manual",
+          privateLocationOnly: true,
+        }),
+      ).toBe("100%");
     });
   });
 
@@ -2095,8 +2249,8 @@ describe("withTinybirdFallback", () => {
   });
 
   it("falls back when the read exceeds the timeout", async () => {
-    // keep a handle on the slow read's timer — deno's leak sanitizer fails
-    // the test if it outlives the assertion
+    // keep a handle on the slow read's timer so it can be cleared before
+    // the test ends
     let slowRead!: ReturnType<typeof setTimeout>;
     const result = await withTinybirdFallback(
       () =>

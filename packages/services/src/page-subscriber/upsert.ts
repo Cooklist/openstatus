@@ -33,7 +33,6 @@ export type UpsertSelfSignupResult = {
   acceptedAt: Date | null;
   unsubscribedAt?: Date | null;
   componentIds: number[];
-  shouldSendVerification: boolean;
 };
 
 /**
@@ -59,7 +58,6 @@ export async function upsertSelfSignupSubscriber(args: {
   /** `null` only when the caller already authorized the request (workspace API). */
   visitor: PageVisitor | null;
   db?: DB;
-  claimVerification?: boolean;
 }): Promise<UpsertSelfSignupResult> {
   const input = UpsertSelfSignupSubscriberInput.parse(args.input);
   const componentIds = input.componentIds ?? [];
@@ -122,19 +120,31 @@ export async function upsertSelfSignupSubscriber(args: {
         token: existing.token,
         acceptedAt: existing.acceptedAt,
         componentIds: existing.components.map((c) => c.pageComponentId),
-        shouldSendVerification: false,
       };
     }
 
     if (existing) {
-      // Pending row — always merge scope; refresh only when issuing a link.
-      const shouldSendVerification =
-        !existing.token ||
-        !existing.expiresAt ||
-        existing.expiresAt <= new Date();
+      // Pending row — merge components, refresh expiry.
       const currentIds = existing.components.map((c) => c.pageComponentId);
-      const mergedIds = [...new Set([...currentIds, ...componentIds])];
+      // Empty scope means the entire page, so it absorbs component scopes.
+      const mergedIds =
+        currentIds.length === 0 || componentIds.length === 0
+          ? []
+          : [...new Set([...currentIds, ...componentIds])];
       const newIds = mergedIds.filter((id) => !currentIds.includes(id));
+      const scopeChanged =
+        mergedIds.length !== currentIds.length || newIds.length > 0;
+      // A link issued for the previous scope must not authorize wider coverage.
+      const token = scopeChanged ? crypto.randomUUID() : existing.token;
+
+      if (currentIds.length > 0 && mergedIds.length === 0) {
+        await tx
+          .delete(pageSubscriberToPageComponent)
+          .where(
+            eq(pageSubscriberToPageComponent.pageSubscriberId, existing.id),
+          )
+          .run();
+      }
 
       if (newIds.length > 0) {
         await tx
@@ -149,102 +159,21 @@ export async function upsertSelfSignupSubscriber(args: {
           .run();
       }
 
+      const newExpiresAt = new Date(Date.now() + VERIFICATION_EXPIRY_MS);
       const beforeRow = selectPageSubscriberSchema.parse(existing);
+      const updatedRow = await tx
+        .update(pageSubscriber)
+        .set({ token, expiresAt: newExpiresAt, updatedAt: new Date() })
+        .where(eq(pageSubscriber.id, existing.id))
+        .returning()
+        .get();
+      const afterRow = selectPageSubscriberSchema.parse(updatedRow ?? existing);
+
       const auditCtx: ServiceContext = {
         workspace,
         actor: { type: "subscriber", subscriberId: existing.id },
         db: tx,
       };
-
-      if (!args.claimVerification || !shouldSendVerification) {
-        if (newIds.length > 0) {
-          const { token: _beforeToken, ...before } = beforeRow;
-          await emitAudit(tx, auditCtx, {
-            action: "page_subscriber.update",
-            entityType: "page_subscriber",
-            entityId: existing.id,
-            before,
-            after: before,
-            metadata: { componentIds: mergedIds },
-          });
-        }
-
-        return {
-          id: existing.id,
-          pageId: existing.pageId,
-          pageName: pageData.title,
-          pageSlug: pageData.slug,
-          customDomain: pageData.customDomain,
-          channelType: existing.channelType,
-          email: existing.email ?? emailLower,
-          token: existing.token,
-          acceptedAt: null,
-          componentIds: mergedIds,
-          shouldSendVerification: false,
-        };
-      }
-
-      const newExpiresAt = new Date(Date.now() + VERIFICATION_EXPIRY_MS);
-      const token = crypto.randomUUID();
-      const updatedRow = await tx
-        .update(pageSubscriber)
-        .set({ expiresAt: newExpiresAt, token, updatedAt: new Date() })
-        .where(
-          and(
-            eq(pageSubscriber.id, existing.id),
-            existing.token
-              ? eq(pageSubscriber.token, existing.token)
-              : isNull(pageSubscriber.token),
-            existing.expiresAt
-              ? eq(pageSubscriber.expiresAt, existing.expiresAt)
-              : isNull(pageSubscriber.expiresAt),
-            isNull(pageSubscriber.acceptedAt),
-            isNull(pageSubscriber.unsubscribedAt),
-          ),
-        )
-        .returning()
-        .get();
-
-      if (!updatedRow) {
-        const active = await tx.query.pageSubscriber.findFirst({
-          where: and(
-            eq(pageSubscriber.id, existing.id),
-            isNull(pageSubscriber.unsubscribedAt),
-          ),
-          with: { components: true },
-        });
-        if (!active) {
-          throw new NotFoundError("page_subscriber", existing.id);
-        }
-
-        if (newIds.length > 0) {
-          const { token: _beforeToken, ...before } = beforeRow;
-          await emitAudit(tx, auditCtx, {
-            action: "page_subscriber.update",
-            entityType: "page_subscriber",
-            entityId: existing.id,
-            before,
-            after: before,
-            metadata: { componentIds: mergedIds },
-          });
-        }
-
-        return {
-          id: active.id,
-          pageId: active.pageId,
-          pageName: pageData.title,
-          pageSlug: pageData.slug,
-          customDomain: pageData.customDomain,
-          channelType: active.channelType,
-          email: active.email ?? emailLower,
-          token: active.token,
-          acceptedAt: active.acceptedAt,
-          componentIds: active.components.map((c) => c.pageComponentId),
-          shouldSendVerification: false,
-        };
-      }
-
-      const afterRow = selectPageSubscriberSchema.parse(updatedRow);
 
       // Strip token (capability for self-manage / unsubscribe URLs).
       // Component scope changes don't show in the row diff — surface
@@ -257,7 +186,7 @@ export async function upsertSelfSignupSubscriber(args: {
         entityId: existing.id,
         before: beforeSnap,
         after: afterSnap,
-        ...(newIds.length > 0 ? { metadata: { componentIds: mergedIds } } : {}),
+        ...(scopeChanged ? { metadata: { componentIds: mergedIds } } : {}),
       });
 
       return {
@@ -271,7 +200,6 @@ export async function upsertSelfSignupSubscriber(args: {
         token,
         acceptedAt: null,
         componentIds: mergedIds,
-        shouldSendVerification,
       };
     }
 
@@ -330,7 +258,6 @@ export async function upsertSelfSignupSubscriber(args: {
       acceptedAt: inserted.acceptedAt ?? null,
       unsubscribedAt: inserted.unsubscribedAt ?? null,
       componentIds,
-      shouldSendVerification: true,
     };
   });
 }

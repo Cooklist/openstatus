@@ -4,6 +4,7 @@ import { getChannel } from "@openstatus/subscriptions";
 import type { DB } from "../context";
 import { InternalServiceError, ValidationError } from "../errors";
 import { expireSelfSignupVerification } from "./expire-verification";
+import { hasPendingSubscriber } from "./has-pending";
 import { UpsertSelfSignupSubscriberInput } from "./schemas";
 import { upsertSelfSignupSubscriber } from "./upsert";
 
@@ -26,19 +27,24 @@ export async function subscribeSelfSignupSubscriber(args: {
     throw new InternalServiceError("Email channel not found");
   }
 
+  const isPending = await hasPendingSubscriber({
+    input: { email: input.email, pageId: input.pageId },
+    visitor: null,
+    db: args.db,
+  });
+  if (isPending) {
+    throw new ValidationError(PENDING_SUBSCRIPTION_MESSAGE);
+  }
+
   const subscription = await upsertSelfSignupSubscriber({
     input,
     visitor: null,
     db: args.db,
-    claimVerification: true,
   });
 
   if (subscription.acceptedAt) {
     if (args.allowAccepted) return { success: true };
     throw new ValidationError("Email already subscribed");
-  }
-  if (!subscription.shouldSendVerification) {
-    throw new ValidationError(PENDING_SUBSCRIPTION_MESSAGE);
   }
   if (!subscription.token) {
     throw new InternalServiceError("Subscription has no verification token");

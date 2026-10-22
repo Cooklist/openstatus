@@ -3,7 +3,11 @@ import { Events } from "@openstatus/analytics";
 import { and, eq, isNull, sql } from "@openstatus/db";
 import { db } from "@openstatus/db/src/db";
 import { page, pageSubscriber } from "@openstatus/db/src/schema";
-import { PageSubscriptionEmail, sendEmail } from "@openstatus/emails";
+import {
+  PageSubscriptionEmail,
+  sendEmail,
+  statusPageFrom,
+} from "@openstatus/emails";
 
 import { OpenStatusApiError, openApiErrorResponses } from "@/libs/errors";
 import { trackMiddleware } from "@/libs/middlewares";
@@ -105,17 +109,14 @@ export function registerPostPageSubscriber(api: typeof pageSubscribersApi) {
       .returning()
       .get();
 
-    const verificationHost = _page.customDomain || `${_page.slug}.openstatus.dev`;
-    const link = `https://${verificationHost}/verify/${token}`;
+    const link = `https://${_page.slug}.openstatus.dev/verify/${token}`;
 
     await sendEmail({
       react: PageSubscriptionEmail({
         link,
         page: _page.title,
       }),
-      from:
-        process.env.OPENSTATUS_EMAIL_FROM?.trim() ??
-        "OpenStatus <notification@notifications.openstatus.dev>",
+      from: statusPageFrom(_page.title),
       to: [normalizedEmail],
       subject: `Confirm your subscription to ${_page.title}`,
     });
